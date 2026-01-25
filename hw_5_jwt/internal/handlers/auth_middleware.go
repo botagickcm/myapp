@@ -19,7 +19,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Проверяем формат "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			c.JSON(http.StatusUnauthorized, gin.H{

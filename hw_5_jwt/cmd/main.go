@@ -14,7 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"hw_5_jwt/internal/handlers" // Изменено: убрали псевдоним
+	"hw_5_jwt/internal/handlers" 
 	"hw_5_jwt/internal/postgres"
 )
 
@@ -80,7 +80,7 @@ func main() {
 	e.Use(middleware.Secure())
 
 	repo := postgres.NewRepository(conn)
-	h := handlers.NewHandler(repo, logger) // Изменено: handlers вместо handler
+	h := handlers.NewHandler(repo, logger) 
 
 	h.RegisterRoutes(e)
 

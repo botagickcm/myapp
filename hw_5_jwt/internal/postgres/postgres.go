@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	// "database/sql"
 	"fmt"
 	"hw_5_jwt/internal/models"
 	"time"
@@ -19,13 +20,18 @@ func NewRepository(db *pgx.Conn) *Repository {
 
 func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
-		INSERT INTO users (email, password_hash) 
-		VALUES ($1, $2) 
-		RETURNING id, email, created_at
+		INSERT INTO users (email, password_hash, role, name, surname ) 
+		VALUES ($1, $2, $3, $4, $5) 
+		RETURNING id, email, role, name, surname, created_at
 	`
 
-	err := r.db.QueryRow(ctx, query, user.Email, user.Password).Scan(
-		&user.ID, &user.Email, &user.CreatedAt,
+	err := r.db.QueryRow(ctx, query, user.Email, user.Password, &user.Role, user.Name, user.Surname).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Role,
+		&user.Name,
+		&user.Surname,
+		&user.CreatedAt,
 	)
 
 	if err != nil {
@@ -34,17 +40,57 @@ func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models
 
 	return user, nil
 }
+func (r *Repository) CreateTeacher(ctx context.Context, teacher *models.Teacher) error {
+	query := `
+		INSERT INTO teachers (user_id,name, surname) 
+		VALUES ($1, $2,$3) 
+		RETURNING id
+	`
+
+	err := r.db.QueryRow(ctx, query, teacher.UserId, teacher.Name, teacher.Surname).Scan(
+		&teacher.ID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("ошибка создания учителя: %w", err)
+	}
+
+	return nil
+}
+
+func (r *Repository) SetInfoToTeacher(ctx context.Context, teacherID, subjectID int) error {
+	query := `
+		UPDATE teachers 
+		SET subject_id = $1 
+		WHERE id = $2
+		RETURNING id
+	`
+	var updatedID int
+	err := r.db.QueryRow(ctx, query, subjectID, teacherID).Scan(&updatedID)
+	if err != nil {
+		return fmt.Errorf("ошибка обновления предмета учителя: %w", err)
+	}
+
+	return nil
+
+}
 
 func (r *Repository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, created_at 
+		SELECT id, email, password_hash, role, name, surname, created_at 
 		FROM users 
 		WHERE email = $1
 	`
 
 	user := &models.User{}
 	err := r.db.QueryRow(ctx, query, email).Scan(
-		&user.ID, &user.Email, &user.Password, &user.CreatedAt,
+		&user.ID,
+		&user.Email,
+		&user.Password,
+		&user.Role,
+		&user.Name,
+		&user.Surname,
+		&user.CreatedAt,
 	)
 
 	if err != nil {
@@ -325,6 +371,43 @@ func (r *Repository) GetAllStudents(ctx context.Context) ([]models.Student, erro
 	return students, nil
 }
 
+func (r *Repository) GetAllTeachers(ctx context.Context) ([]models.Teacher, error) {
+	query := `
+		SELECT id,user_id, name, surname, gender, subject
+		FROM teachers 
+		ORDER BY id
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения учителей: %w", err)
+	}
+	defer rows.Close()
+
+	var teachers []models.Teacher
+	for rows.Next() {
+		var teacher models.Teacher
+		err := rows.Scan(
+			&teacher.ID,
+			&teacher.UserId,
+			&teacher.Name,
+			&teacher.Surname,
+			&teacher.Gender,
+			&teacher.Subject,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка сканирования учителей: %w", err)
+		}
+		teachers = append(teachers, teacher)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка итерации учителеей: %w", err)
+	}
+
+	return teachers, nil
+}
+
 func (r *Repository) GetGroups(ctx context.Context) ([]models.Group, error) {
 	query := `
 		SELECT group_id, group_name, faculty
@@ -382,3 +465,5 @@ func (r *Repository) GetGroup(ctx context.Context, id int) (*models.Group, error
 
 	return &group, nil
 }
+
+//token for teacher eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjo5LCJleHAiOjE3Njk5NTc3OTksIm5iZiI6MTc2OTM1Mjk5OSwiaWF0IjoxNzY5MzUyOTk5fQ.nazB_NCggZ2-J91YeC77algo9Wioy7G_w5Wki9ZbSLI

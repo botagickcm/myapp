@@ -1,21 +1,45 @@
 package models
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
+
+type Teacher struct {
+	ID      int            `json:"id" db:"id"`
+	Name    sql.NullString `json:"name"`
+	Surname sql.NullString `json:"surname"`
+	Gender  sql.NullString `json:"gender"`
+	Subject sql.NullString `json:"subject"`
+	UserId  int            `json:"user_id" db:"user_id"`
+}
 
 type User struct {
-	ID        int       `json:"id" db:"id"`
-	Email     string    `json:"email" db:"email"`
-	Password  string    `json:"-" db:"password"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	ID        int            `json:"id" db:"id"`
+	Email     string         `json:"email" db:"email"`
+	Password  string         `json:"-" db:"password"`
+	Name      sql.NullString `json:"name"`
+	Surname   sql.NullString `json:"surname"`
+	CreatedAt time.Time      `json:"created_at" db:"created_at"`
+	Role      string         `json:"role,omitempty" db:"role"`
+	Status    sql.NullString `json:"status,omitempty" db:"status"`
+}
+
+type SetInfoToTeacher struct {
+	TeacherID int `json:"teacher_id" validate:"required"`
+	SubjectID int `json:"subject_id" validate:"required"`
 }
 type RegisterRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Role     string `json:"role, omitempty"`
+	Name     string `json:"name"`
+	Surname  string `json:"surname"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type ServerResponse struct {
@@ -71,6 +95,7 @@ type Student struct {
 	Gender    string    `json:"gender"`
 	Birthday  time.Time `json:"birthday"`
 	GroupID   int       `json:"group_id"`
+	UserId    int       `json:"user_id" db:"user_id"`
 }
 
 type Group struct {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -39,7 +40,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo) {
 	protected.Use(h.AuthMiddleware)
 	{
 		protected.GET("/users/me", h.GetCurrentUser)
-
+		protected.GET("/teachers", h.GetAllTeachers)
+		protected.POST("/teachers/subject", h.SetInfoToTeacher)
 		protected.GET("/students", h.GetAllStudents)
 		protected.GET("/students/:id", h.GetStudent)
 		protected.GET("/schedule", h.GetAllSchedule)
@@ -96,6 +98,17 @@ func (h *Handler) Register(c echo.Context) error {
 			Error:   err.Error(),
 		})
 	}
+	if req.Role != "" {
+		validRoles := map[string]bool{"student": true, "teacher": true, "admin": true}
+		if !validRoles[req.Role] {
+			return c.JSON(http.StatusBadRequest, models.ServerResponse{
+				Status:  "error",
+				Message: "Недопустимая роль. Допустимые значения: student, teacher, admin",
+			})
+		}
+	} else {
+		req.Role = "student"
+	}
 
 	existingUser, err := h.repo.GetUserByEmail(c.Request().Context(), req.Email)
 	if err != nil {
@@ -125,6 +138,10 @@ func (h *Handler) Register(c echo.Context) error {
 	user := &models.User{
 		Email:    req.Email,
 		Password: string(hashedPassword),
+		Role:     req.Role,
+		Status:   sql.NullString{String: "active", Valid: true},
+		Name:     sql.NullString{String: req.Name, Valid: req.Name != ""},
+		Surname:  sql.NullString{String: req.Surname, Valid: req.Surname != ""},
 	}
 
 	createdUser, err := h.repo.CreateUser(c.Request().Context(), user)
@@ -135,6 +152,33 @@ func (h *Handler) Register(c echo.Context) error {
 			Message: "Не удалось создать пользователя",
 			Error:   err.Error(),
 		})
+	}
+
+	if createdUser.Role == "teacher" {
+		teacher := &models.Teacher{
+			UserId:  createdUser.ID,
+			Name:    createdUser.Name,
+			Surname: createdUser.Surname,
+		}
+		h.logger.Info("зарегистрирован новый учитель",
+			"user_id", createdUser.ID,
+			"teacher_id", teacher.ID,
+			"teacher_name", teacher.Name,
+			"teacher_surname", teacher.Surname,
+		)
+		err := h.repo.CreateTeacher(c.Request().Context(), teacher)
+		if err != nil {
+			h.logger.Error("ошибка создания учителя", "error", err)
+			return c.JSON(http.StatusInternalServerError, models.ServerResponse{
+				Status:  "error",
+				Message: "Не удалось создать учителя",
+				Error:   err.Error(),
+			})
+		}
+		h.logger.Info("учитель создан",
+			"user_id", user.ID,
+			"teacher_id", teacher.ID,
+		)
 	}
 
 	token, err := GenerateToken(createdUser.ID)
@@ -214,6 +258,55 @@ func (h *Handler) Login(c echo.Context) error {
 			"token": token,
 			"user":  user,
 		},
+	})
+}
+
+func (h *Handler) SetInfoToTeacher(c echo.Context) error {
+	var req models.SetInfoToTeacher
+
+	if err := c.Bind(&req); err != nil {
+		h.logger.Warn("ошибка привязки данных для назначения предмета учителю",
+			"error", err)
+		return c.JSON(http.StatusBadRequest, models.ServerResponse{
+			Status:  "error",
+			Message: "Неверный формат данных",
+		})
+	}
+	h.logger.Info("назначение предмета учителю",
+		"teacher_id", req.TeacherID,
+		"subject_id", req.SubjectID,
+	)
+
+	err := h.repo.SetInfoToTeacher(c.Request().Context(), req.TeacherID, req.SubjectID)
+	if err != nil {
+		h.logger.Error("ошибка назначения предмета учителю",
+			"error", err,
+			"teacher_id", req.TeacherID,
+			"subject_id", req.SubjectID,
+		)
+
+		if strings.Contains(err.Error(), "не найден") {
+			return c.JSON(http.StatusNotFound, models.ServerResponse{
+				Status:  "error",
+				Message: "Учитель не найден",
+			})
+		}
+
+		return c.JSON(http.StatusInternalServerError, models.ServerResponse{
+			Status:  "error",
+			Message: "Не удалось назначить предмет учителю",
+			Error:   err.Error(),
+		})
+	}
+
+	h.logger.Info("предмет успешно назначен учителю",
+		"teacher_id", req.TeacherID,
+		"subject_id", req.SubjectID,
+	)
+
+	return c.JSON(http.StatusOK, models.ServerResponse{
+		Status:  "success",
+		Message: "Предмет успешно назначен учителю",
 	})
 }
 
@@ -478,6 +571,25 @@ func (h *Handler) GetAllStudents(c echo.Context) error {
 	return c.JSON(http.StatusOK, models.ServerResponse{
 		Status: "success",
 		Data:   students,
+	})
+}
+
+func (h *Handler) GetAllTeachers(c echo.Context) error {
+	h.logger.Info("получение всех учителей")
+
+	teachers, err := h.repo.GetAllTeachers(c.Request().Context())
+	if err != nil {
+		h.logger.Error("ошибка получения учителей", "error", err)
+		return c.JSON(http.StatusInternalServerError, models.ServerResponse{
+			Status:  "error",
+			Message: "Ошибка получения учителей",
+		})
+	}
+
+	h.logger.Info("учителя успешно получены", "count", len(teachers))
+	return c.JSON(http.StatusOK, models.ServerResponse{
+		Status: "success",
+		Data:   teachers,
 	})
 }
 
