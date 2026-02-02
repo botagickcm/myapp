@@ -2,6 +2,8 @@ package postgres
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	// "database/sql"
 	"fmt"
 	"hw_5_jwt/internal/models"
@@ -17,7 +19,28 @@ type Repository struct {
 func NewRepository(db *pgx.Conn) *Repository {
 	return &Repository{db: db}
 }
+func InitSchemaFromFile(ctx context.Context, conn *pgx.Conn, logger *slog.Logger) error {
+	// Читаем SQL файл
+	sqlBytes, err := os.ReadFile("database/schema.sql")
+	if err != nil {
+		// Пробуем относительный путь
+		sqlBytes, err = os.ReadFile("database/schema.sql")
+		if err != nil {
+			return fmt.Errorf("не удалось прочитать файл схемы: %w", err)
+		}
+	}
 
+	logger.Info("запуск инициализации схемы БД из файла")
+
+	_, err = conn.Exec(ctx, string(sqlBytes))
+	if err != nil {
+		logger.Error("ошибка инициализации схемы БД", "error", err)
+		return fmt.Errorf("ошибка инициализации схемы БД: %w", err)
+	}
+
+	logger.Info("схема БД успешно инициализирована из файла")
+	return nil
+}
 func (r *Repository) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {
 	query := `
 		INSERT INTO users (email, password_hash, role, name, surname ) 

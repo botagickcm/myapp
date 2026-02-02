@@ -14,7 +14,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 
-	"hw_5_jwt/internal/handlers" 
+	"hw_5_jwt/internal/handlers"
 	"hw_5_jwt/internal/postgres"
 )
 
@@ -46,6 +46,10 @@ func main() {
 	}
 
 	logger.Info("успешное подключение к базе данных")
+	if err := postgres.InitSchemaFromFile(context.Background(), conn, logger); err != nil {
+		logger.Error("ошибка инициализации схемы БД", "error", err)
+
+	}
 
 	e := echo.New()
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -80,7 +84,7 @@ func main() {
 	e.Use(middleware.Secure())
 
 	repo := postgres.NewRepository(conn)
-	h := handlers.NewHandler(repo, logger) 
+	h := handlers.NewHandler(repo, logger)
 
 	h.RegisterRoutes(e)
 
@@ -89,7 +93,14 @@ func main() {
 
 	go func() {
 		logger.Info("сервер запущен на :8080")
-		if err := e.Start("127.0.0.1:8080"); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+
+		addr := ":" + port
+		logger.Info("сервер запущен на " + addr)
+		if err := e.Start(addr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("ошибка запуска сервера", "error", err)
 		}
 	}()
