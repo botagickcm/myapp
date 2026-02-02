@@ -3,7 +3,7 @@ services:
   - type: web
     name: university-app
     env: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./hw_5_jwt/Dockerfile
     plan: free
     envVars:
       - key: DATABASE_URL
